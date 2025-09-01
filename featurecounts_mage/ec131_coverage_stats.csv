@@ -1,0 +1,10 @@
+"","Assigned","Unassigned_Unmapped","Unassigned_Read_Type","Unassigned_Singleton","Unassigned_MappingQuality","Unassigned_Chimera","Unassigned_FragmentLength","Unassigned_Duplicate","Unassigned_MultiMapping","Unassigned_Secondary","Unassigned_NonSplit","Unassigned_NoFeatures","Unassigned_Overlapping_Length","Unassigned_Ambiguity","Total_Reads","Perc_Assigned"
+"13_21_contig_1.Apr_PD1_archaea.sorted.bam",6823,20334,0,0,0,0,0,0,0,0,0,11,0,79,27247,0.250412889492421
+"13_21_contig_1.Apr_PD2_archaea.sorted.bam",22260,81450,0,0,0,0,0,0,0,0,0,65,0,65,103840,0.214368258859784
+"13_21_contig_1.Apr_PD3_archaea.sorted.bam",2718,30150,0,0,0,0,0,0,0,0,0,2,0,46,32916,0.0825738242799854
+"13_21_contig_1.Aug_PD1_archaea.sorted.bam",18153,63378,0,0,0,0,0,0,0,0,0,3,0,31,81565,0.222558695518911
+"13_21_contig_1.Aug_PD2_archaea.sorted.bam",4339,35956,0,0,0,0,0,0,0,0,0,9,0,20,40324,0.107603412359885
+"13_21_contig_1.Aug_PD3_archaea.sorted.bam",5192,23499,0,0,0,0,0,0,0,0,0,13,0,15,28719,0.180786239075177
+"13_21_contig_1.Oct_PD1_archaea.sorted.bam",8546,21354,0,0,0,0,0,0,0,0,0,40,0,26,29966,0.285189881866115
+"13_21_contig_1.Oct_PD2_archaea.sorted.bam",6002,51282,0,0,0,0,0,0,0,0,0,7,0,32,57323,0.104704917746803
+"13_21_contig_1.Oct_PD3_archaea.sorted.bam",4502,17130,0,0,0,0,0,0,0,0,0,12,0,28,21672,0.207733480989295
