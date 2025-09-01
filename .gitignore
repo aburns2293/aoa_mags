@@ -1,0 +1,7 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+mag_mt_mapping/*
+mag_annotation/*
+
