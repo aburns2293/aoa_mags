@@ -49,8 +49,11 @@ ggplot(eg_annotated[eg_annotated$Culture != 'Nitrosotalea 5',], aes(x = Date, y 
 
 ## biofilm-related
 
-biofilm <- eg_annotated %>% filter(`Putative Pathway` %in% c('Adhesion', 'Motility', 'Quorum sensing', 'Signaling'), Culture != 'Nitrosotalea 5') %>% arrange(`Putative Pathway`)
+eg_annotated <- read.csv('annotated_transcript_hits_tpm.csv')
 
+biofilm <- eg_annotated %>% filter(Putative.Pathway %in% c('Adhesion', 'Motility', 'Quorum sensing', 'Signaling'), Culture %in% c('Nitrosotalea 131', 'Ca. Nitrosocosmicus')) %>% arrange(`Putative.Pathway`)
+
+biofilm_loci <- biofilm %>% select(product, locus_tag, Putative.Pathway) %>% unique()
 biofilm$Sample <- factor(biofilm$Sample, levels = c('Apr_PD1', 'Apr_PD2', 'Apr_PD3', 'Aug_PD1', 'Aug_PD2', 'Aug_PD3', 'Oct_PD1', 'Oct_PD2', 'Oct_PD3'))
 biofilm$product <- factor(biofilm$product, levels = c('3-hydroxy-2,4-pentadione 5-phosphate thiolase',
                                                                             'Late endosomal/lysosomal adaptor and MAPK and MTOR activator 5',
@@ -79,11 +82,13 @@ biofilm[biofilm$product %in% c('Spondin_N',
                                'F5/8 type C domain protein',
                                'Archaeal Type IV pilin N-terminal domain-containing protein'),]$Type <- 'Adhesion'
 
-biofilm.grouped <- biofilm %>% group_by(Culture, Date, Sample, `Putative Pathway`) %>% summarise(total = sum(TPM))
+biofilm[biofilm$Culture == 'Nitrosotalea 131',]$Culture <- 'Nitrosotalea'
+
+biofilm.grouped <- biofilm %>% group_by(Culture, Date, Sample, Putative.Pathway) %>% summarise(total = sum(TPM))
 
 colors <- met.brewer('Thomas')
 
-biofilm_plot <- ggplot(biofilm.grouped, aes(x = Sample, y = `Putative Pathway`, fill = total)) + 
+biofilm_plot <- ggplot(biofilm.grouped, aes(x = Sample, y = Putative.Pathway, fill = total)) + 
   geom_tile() + 
   geom_vline(xintercept = 3.5, linetype = 'dashed') + 
   geom_vline(xintercept = 6.5, linetype = 'dashed') + 
@@ -104,9 +109,12 @@ biofilm_plot <- ggplot(biofilm.grouped, aes(x = Sample, y = `Putative Pathway`, 
         strip.text = element_text(size = 12),
         panel.border = element_rect(color = "black", fill = NA, linewidth = 1))
 biofilm_plot
+
 ## stress
 
-stress <- eg_annotated %>% filter(`Putative Pathway` %in% c('Nutrient storage', 'Stress protein', 'Antitoxin'), Culture != 'Nitrosotalea 5')
+stress <- eg_annotated %>% filter(Putative.Pathway %in% c('Chaperone', 'Nutrient storage', 'Stress protein', 'Antitoxin'), Culture %in% c('Nitrosotalea 131', 'Ca. Nitrosocosmicus'))
+
+stress[stress$Culture == 'Nitrosotalea 131',]$Culture <- 'Nitrosotalea'
 
 stress$Sample <- factor(stress$Sample, levels = c('Apr_PD1', 'Apr_PD2', 'Apr_PD3', 'Aug_PD1', 'Aug_PD2', 'Aug_PD3', 'Oct_PD1', 'Oct_PD2', 'Oct_PD3'))
 
@@ -126,6 +134,10 @@ ggplot(stress, aes(x = Sample, y = product, fill = TPM)) +
         panel.spacing=unit(0, "lines"),
         panel.border = element_rect(color = "black", fill = NA, linewidth = 1))
 
+stress <- stress %>% filter(product != 'PAC2 family protein', product != 'prefoldin alpha subunit', product != 'Prefoldin subunit alpha',
+                            product != 'Prefoldin subunit beta', product != 'peptidyl-prolyl cis-trans isomerase B (cyclophilin B)',
+                            product != 'OmpH family outer membrane protein')
+
 stress$Type <- 'NA'
 
 stress[stress$product %in% c('Antitoxin SocA-like Panacea domain-containing protein',
@@ -139,8 +151,11 @@ stress[stress$product %in% c('DNA protection during starvation protein', 'gamma-
                              'methionine sulfoxide reductase B', 'Non-heme bromoperoxidase BpoC',
                              'putative peroxiredoxin bcp', 'Superoxide dismutase [Mn]', 'Superoxide dismutase [Mn]', 'thioredoxin 1', 'Hypoxic response protein 1'),]$Type <- 'Oxidative'
 stress[stress$product %in% c('Phasin domain-containing protein', 'Phasin family protein', 'Phasin protein', 'putative Patatin-like phospholipase'),]$Type <- 'Nutrient storage'
+stress[stress$Putative.Pathway == 'Chaperone',]$Type <- 'Heat shock chaperones'
 
 stress.grouped <- stress %>% group_by(Culture, Date, Sample, Type) %>% summarise(total = sum(TPM))
+
+stress_loci <- stress %>% select(product, locus_tag) %>% unique()
 
 stress_plot <- ggplot(stress.grouped, aes(x = Sample, y = Type, fill = total)) + 
   geom_tile() + 
@@ -151,7 +166,7 @@ stress_plot <- ggplot(stress.grouped, aes(x = Sample, y = Type, fill = total)) +
   xlab('') +
   ylab('') +
   ggtitle('Stress-Related Transcripts') + 
-  scale_fill_continuous(name = 'TPM Scaled', low = colors[8], high = colors[7], limits=c(0.1,85000),na.value="grey90") +
+  scale_fill_continuous(name = 'TPM Scaled', low = colors[8], high = colors[7], limits = c(1, 75000), na.value="grey90") +
   facet_wrap(vars(Culture)) + 
   theme_classic() +
   theme(aspect.ratio = 1,
@@ -167,9 +182,10 @@ stress_plot
 
 ### water content information
 
-water_table <- read_csv('water_table_summary.csv') %>% filter(Site == 'PD')
-library(lubridate)
-water_table$Date2 <- ymd(water_table$Date)
+water_table <- read.csv('water_table_summary.csv') %>% filter(Site == 'PD')library(lubridate)
+library(stringr)
+water_table$Date2 <- str_replace(water_table$Date, '^00', '20')
+water_table$Date2 <- ymd(water_table$Date2)
 
 water_table <- water_table %>% filter(Date2 > '2018-03-15' & Date2 < '2018-11-15')
 
@@ -192,6 +208,7 @@ water_fig <- ggplot(water_table, aes(x = Date2, y = GW_level)) +
         axis.text = element_text(size = 18),
         axis.title = element_text(size = 20),
         title = element_text(size = 14))
+water_fig
 
 redox <- read_xlsx('Redox_potential_all.xlsx', sheet = 'Redox_potential_all')
 redox.pd <- redox %>% filter(Site == 'PD', Date %in% c('2018-04-20', '2018-08-09', '2018-10-02'))
@@ -246,11 +263,13 @@ temp_fig <- ggplot(soil_temp_pd, aes(x = day, y = daily_avg)) +
 
 temp_fig
 ## assembling figure
-grid1 <- plot_grid(water_fig, temp_fig, redox_fig, align = 'hv', nrow=1)
+
+library(cowplot)
+grid1 <- plot_grid(water_fig, temp_fig, redox_fig, align = 'hv', ncol=1)
 
 grid2 <- plot_grid(biofilm_plot, stress_plot, align = 'hv', ncol = 1)
 
 grid1
 grid2
 
-plot_grid(biofilm_plot, stress_plot, grid1, ncol = 1, align = 'hv', axis = 'trl')
+plot_grid(biofilm_plot, stress_plot, grid1, ncol = 1)

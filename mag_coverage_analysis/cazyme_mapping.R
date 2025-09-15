@@ -1,88 +1,96 @@
 
-setwd('~/aoa_mags/mag_mt_mapping/CAZymes/output')
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(ggplot2)
+library(readxl)
 
-files <- list.files()
-contigs <- c('contig5', 'contig11', 'contig131', 'contig133')
-time_points <- c('Apr_PD1', 'Apr_PD2', 'Apr_PD3', 'Aug_PD1', 'Aug_PD2', 'Aug_PD3', 'Oct_PD1', 'Oct_PD2', 'Oct_PD3')
+setwd('~/aoa_mags/mag_mt_mapping/CAZymes')
 
-top_hits <- data.frame(matrix(nrow = 0, ncol = 14))
-names(top_hits) <- c('Transcript_ID', 'ID', 'Perc_ID', 'Length', 'Mismatch', 'GapOpen', 'QStart', 'QEnd', 'SStart', 'SEnd', 'EValue', 'Bitscore', 'Contig', 'Sample')
+tpm <- read_csv('~/aoa_mags/mag_coverage_analysis/transcript_hits_tpm.csv') %>% filter(Culture %in% c('Ca. Nitrosocosmicus', 'Nitrosotalea 131'))
 
-for(i in contigs){
-  for(k in time_points){
-    for (j in files) {
-      if (str_detect(j, i) == TRUE & str_detect(j, k) == TRUE){
-        data <- read_delim(j, delim = "\t", escape_double = FALSE, 
-                           col_names = FALSE, trim_ws = TRUE)
-        names(data) <- c('Transcript_ID', 'ID', 'Perc_ID', 'Length', 'Mismatch', 'GapOpen', 'QStart', 'QEnd', 'SStart', 'SEnd', 'EValue', 'Bitscore')
-        hits <- data %>% group_by(Transcript_ID) %>% arrange(desc(Perc_ID)) %>% filter(row_number() == 1)
-        hits$Contig <- i
-        hits$Sample <- k
-        
-        top_hits <- rbind(top_hits, hits)
-      }
-    }
-  }
-}
+## Nitrosocosmicus (NC11)
 
-# sort contig IDs
-setwd('..')
-out <- read_delim('133_cazyme_CGC/hmmer.out', delim = '\t')
-out.short <- out %>% select(`HMM Profile`, `Profile Length`, `Gene ID`)
-out.short$Contig <- 'contig133'
+nc11_hmm <- read_delim("NC11_cazyme/dbCAN_hmm_results.tsv", 
+                       delim = "\t", escape_double = FALSE, 
+                       trim_ws = TRUE)
 
-contig_ids_full <- rbind(contig_ids_full, out.short)
-write.csv(contig_ids_full, 'dbcan_ids.csv', row.names = FALSE)
+nc11_hmm <- nc11_hmm %>% filter(`i-Evalue` < 1e-15,
+                          Coverage > 0.8)
 
-contig_ids_full <- rename(contig_ids_full, ID = `Gene ID`)
-contig_ids_full <- contig_ids_full %>% select(-Contig)
+########################### run in blast conda env #################################
 
-# bind
+#makeblastdb -in ../NC11_contig_2.fasta -dbtype nucl
+#tblastn -query NC11_cazyme_hmm_positive_hits.fasta -db ../NC11_contig_2.fasta -outfmt 6 -out NC11_cazyme_genome_loc.txt
 
-top_hits_full <- left_join(top_hits, contig_ids_full, by = 'ID', relationship = 'many-to-many')
+###################################################################################
 
-write.csv(top_hits_full, 'dbcan_output_detailed.csv', row.names = FALSE)
+nc11_blastlocs <- read.delim('NC11_cazyme/NC11_cazyme_genome_loc.txt', header = FALSE)
 
-# tpm 
+colnames(nc11_blastlocs) <- c('qseqid', 'sseqid', 'pident', 'length', 'mismatch', 'gapopen', 'qstart', 'qend', 'sstart', 'send', 'evalue', 'bitscore')
+nc11_blastlocs <- nc11_blastlocs %>% filter(pident >= 99)
 
-caz.sums <- top_hits_full %>% group_by(Contig, Sample, `HMM Profile`, `Profile Length`) %>% summarise(Read_Count = n())
+########################### in MaGe ###############################################
+### manually locate locus tags based on sequence starts and ends in blast output ##
+###################################################################################
 
-caz.sums <- caz.sums %>% mutate(Profile_Length_Kb = `Profile Length`/1000,
-                                    Reads_per_Kb = Read_Count/Profile_Length_Kb)
+nc11_locus_tags <- read_xlsx('NC11_cazyme/NC11_Cazyme_IDs.xlsx')
+nc11_hmm_locus_tags <- left_join(nc11_hmm, nc11_locus_tags, by = 'Target Name')
 
-caz.sums$Per_Million_Factor <- NA
+nc11_tpm <- left_join(nc11_hmm_locus_tags, tpm, by = 'locus_tag', relationship = 'many-to-many')
 
-for(i in contigs){
-  for(j in time_points){
-    subset <- caz.sums[caz.sums$Contig == i & caz.sums$Sample == j,]
-    total_reads_per_kb <- sum(subset$Reads_per_Kb)
-    reads_per_kb_million <- total_reads_per_kb / 1000000
-    caz.sums[caz.sums$Contig == i & caz.sums$Sample == j,]$Per_Million_Factor <- reads_per_kb_million
-  }
-}
 
-caz.sums <- caz.sums %>% mutate(TPM = Reads_per_Kb/Per_Million_Factor)
+ggplot(nc11_tpm, aes(y = product, x = Sample, fill = TPM, col = `HMM Name`)) +
+  geom_tile() 
 
-write.csv(caz.sums, 'cazyme_hits_tpm.csv', row.names = FALSE)
+## Nitrosotalea (NT131)
 
-## figure
+nt131_hmm <- read_delim("NT131_cazyme/dbCAN_hmm_results.tsv", 
+                       delim = "\t", escape_double = FALSE, 
+                       trim_ws = TRUE)
 
-caz.sums <- read.csv('cazyme_hits_tpm.csv')
+nt131_hmm <- nt131_hmm %>% filter(`i-Evalue` < 1e-15,
+                                Coverage > 0.8)
 
-caz.sums$`HMM.Profile` <- str_sub(caz.sums$`HMM.Profile`, end = -5)
+########################### run in blast conda env #################################
 
-ggplot(caz.sums, aes(x = Sample, y = `HMM.Profile`, fill = Read_Count)) + 
-  geom_tile() + 
-  facet_wrap(vars(Contig)) + 
-  xlab('') + 
-  ylab('') + 
-  scale_fill_distiller(palette = 'BuGn', direction = 1, name = 'Reads') + 
-  geom_vline(xintercept = 3.5) + 
-  geom_vline(xintercept = 6.5) +
-  geom_vline(xintercept = 9.5) +
-  scale_x_discrete(labels = c('', 'April', '', '', 'August', '', '', 'October', ''), expand = c(0,0)) + 
-  scale_y_discrete(expand = c(0,0)) + 
-  theme_classic() + 
-  ggtitle('CAZyme Expression in PD Metatranscriptomes') + 
-  theme(panel.spacing = unit(0, 'lines'))
-  
+#makeblastdb -in ../13_21_contig_1.fasta -dbtype nucl
+#tblastn -query NT131_cazyme_hmm_positive_hits.fasta -db ../13_21_contig_1.fasta -outfmt 6 -out NT131_cazyme_genome_loc.txt
+
+###################################################################################
+
+nt131_blastlocs <- read.delim('NT131_cazyme/NT131_cazyme_genome_loc.txt', header = FALSE)
+
+colnames(nt131_blastlocs) <- c('qseqid', 'sseqid', 'pident', 'length', 'mismatch', 'gapopen', 'qstart', 'qend', 'sstart', 'send', 'evalue', 'bitscore')
+nt131_blastlocs <- nt131_blastlocs %>% filter(pident >= 99)
+
+########################### in MaGe ###############################################
+### manually locate locus tags based on sequence starts and ends in blast output ##
+###################################################################################
+
+nt131_locus_tags <- read_xlsx('NT131_cazyme/NT131_Cazyme_IDs.xlsx')
+nt131_hmm_locus_tags <- left_join(nt131_hmm, nt131_locus_tags, by = 'Target Name')
+
+nt131_tpm <- left_join(nt131_hmm_locus_tags, tpm, by = 'locus_tag', relationship = 'many-to-many')
+
+# Join data
+ 
+cazyme_tpm <- rbind(nc11_tpm, nt131_tpm)
+ 
+write.csv(cazyme_tpm, '~/aoa_mags/mag_coverage_analysis/cazyme_tpm_coverage.csv', row.names = FALSE)
+
+
+######################################################################################################
+
+setwd('~/aoa_mags/mag_coverage_analysis/')
+cazyme_tpm <- read_csv('cazyme_tpm_coverage.csv')
+
+ggplot(cazyme_tpm, aes(y = `HMM Name`, x = Sample, fill = TPM)) +
+  geom_tile() +
+  facet_wrap(vars(Culture), scales = 'free') +
+  scale_fill_continuous(limits = c(1, 3500), na.value = 'light grey') +
+  theme_classic()
+
+cazyme_summary <- cazyme_tpm %>% select(`Target Name`, `HMM Name`, `i-Evalue`, Coverage, locus_tag, length, product, Culture) %>% unique()
+
+write.csv(cazyme_summary, 'cazyme_summary.csv', row.names = FALSE)

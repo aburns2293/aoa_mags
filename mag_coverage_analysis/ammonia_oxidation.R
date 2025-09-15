@@ -45,6 +45,9 @@ amm$product_short <- factor(amm$product, levels = c(
              "amt_MTH_663", "amt3",
              "amoY", "amoX", "amoC", "amoB", "amoA"))
 
+amm <- amm %>% filter(Culture %in% c('Ca. Nitrosocosmicus', 'Nitrosotalea 131'))
+amm[amm$Culture == 'Nitrosotalea 131',]$Culture <- 'Nitrosotalea'
+
 amo.plot <- ggplot(amm[amm$product_short %in% c("amoA", "amoB", "amoC", "amoX", "amoY"),], aes(x = Sample, y = product_short, fill = TPM)) + 
   geom_tile() + 
   geom_vline(xintercept = 3.5, linetype = 'dashed') + 
@@ -54,8 +57,8 @@ amo.plot <- ggplot(amm[amm$product_short %in% c("amoA", "amoB", "amoC", "amoX", 
   xlab('') +
   ylab('') +
   ggtitle('Ammonia Monooxygenase Transcripts') + 
-  scale_fill_continuous(name = 'TPM', low = colors[3], high = colors[2], na.value = 'grey90', limits = c(0.1, 3e5)) +
-  facet_wrap(vars(Culture)) + 
+  scale_fill_continuous(name = 'TPM', low = colors[3], high = colors[2], na.value = 'grey90', limits = c(0.1, 3e5), breaks = c(1e5, 2e5, 3e5), labels = c("100000", "200000", "300000")) +
+  facet_wrap(vars(Culture), ncol=1) + 
   theme_classic() +
   theme(aspect.ratio = 1,
         panel.spacing=unit(0, "lines"),
@@ -80,7 +83,7 @@ other.amm <- ggplot(other.amm.genes, aes(x = Sample, y = product_short, fill = T
   ylab('') +
   ggtitle('Ammonia Oxidation Transcripts') + 
   scale_fill_continuous(name = 'TPM', low = colors[3], high = colors[2], na.value = 'grey90', limits=c(0.1,1e5)) +
-  facet_wrap(vars(Culture)) + 
+  facet_wrap(vars(Culture), ncol=1) + 
   theme_classic() +
   theme(aspect.ratio = 1,
         panel.spacing=unit(0, "lines"),
@@ -111,7 +114,7 @@ nitrogen[nitrogen$X == '18OctPD105',]$Sample <- 'Oct_PD1'
 nitrogen[nitrogen$X == '18OctPD205',]$Sample <- 'Oct_PD2'
 nitrogen[nitrogen$X == '18OctPD305',]$Sample <- 'Oct_PD3'
 
-amo <- amm %>% filter(product_short %in% c('amoY', 'amoX', 'amoC', 'amoB', 'amoA'))
+amo<- amm %>% filter(product_short %in% c('amoY', 'amoX', 'amoC', 'amoB', 'amoA'))
 amo$season2 <- NA
 amo[str_detect(amo$Sample, 'Apr') == TRUE,]$season2 <- '18-Apr'
 amo[str_detect(amo$Sample, 'Aug') == TRUE,]$season2 <- '18-Aug'
@@ -123,7 +126,7 @@ amo.no3 <- amo.no3 %>% filter(product_short != 'amoX', product_short != 'amoY')
 amo.no3$product_short <- factor(amo.no3$product_short, levels = c('amoA', 'amoB', 'amoC'))
 amo.no3 <- amo.no3 %>% filter(locus_tag != 'EC11NC_v1_3459') # reads were mapped twice to two amoC in NC11
 
-ggplot(amo.no3) +
+amo.no3.fig <- ggplot(amo.no3) +
   geom_boxplot(aes(x = season2.x, y = NO3*375), alpha = 0.3, col = 'gray') +
   geom_point(aes(x = season2.x, y = TPM, col = Culture), size = 2) + 
   stat_summary(aes(x = season2.x, y = TPM, col = Culture, group = Culture), fun = "mean", geom = "line", linetype = 'dashed') + 
@@ -133,6 +136,10 @@ ggplot(amo.no3) +
   facet_wrap(vars(product_short)) + 
   theme_classic() + 
   xlab('') + 
-  scale_color_manual(values = c(colors[2],colors[3],colors[8], colors[1])) + 
-  theme(text = element_text(size = 14),
+  scale_color_manual(values = c(colors[2],colors[6])) + 
+  theme(text = element_text(size = 20),
         legend.position = 'bottom')
+
+amo.no3.fig
+
+plot_grid(amo.no3.fig, other.amm, align = 'c')
