@@ -1,0 +1,4 @@
+##gff-version 3
+contig_1	barrnap:0.9	rRNA	274021	274129	9e-11	-	.	Name=5S_rRNA;product=5S ribosomal RNA
+contig_1	barrnap:0.9	rRNA	1896781	1899759	0	-	.	Name=23S_rRNA;product=23S ribosomal RNA
+contig_1	barrnap:0.9	rRNA	1899926	1901394	0	-	.	Name=16S_rRNA;product=16S ribosomal RNA
