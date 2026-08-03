@@ -82,15 +82,20 @@ write.csv(cazyme_tpm, '~/aoa_mags/mag_coverage_analysis/cazyme_tpm_coverage.csv'
 
 ######################################################################################################
 
-setwd('~/aoa_mags/mag_coverage_analysis/')
-cazyme_tpm <- read_csv('cazyme_tpm_coverage.csv')
+library(ggplot2)
+library(dplyr)
 
-ggplot(cazyme_tpm, aes(y = `HMM Name`, x = Sample, fill = TPM)) +
+setwd('~/aoa_mags/mag_coverage_analysis/')
+cazyme_tpm <- read.csv('cazyme_tpm_coverage.csv')
+
+ggplot(cazyme_tpm, aes(y = `HMM.Name`, x = Sample, fill = TPM)) +
   geom_tile() +
   facet_wrap(vars(Culture), scales = 'free') +
   scale_fill_continuous(limits = c(1, 3500), na.value = 'light grey') +
   theme_classic()
 
-cazyme_summary <- cazyme_tpm %>% select(`Target Name`, `HMM Name`, `i-Evalue`, Coverage, locus_tag, length, product, Culture) %>% unique()
+cazyme_summary <- cazyme_tpm %>% select(`Target.Name`, `HMM.Name`, `i.Evalue`, Coverage, locus_tag, length, product, Culture) %>% unique()
 
 write.csv(cazyme_summary, 'cazyme_summary.csv', row.names = FALSE)
+
+cazyme.expressed <- cazyme_tpm %>% filter(TPM > 0)

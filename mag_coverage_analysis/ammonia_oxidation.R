@@ -42,13 +42,21 @@ amm$product_short <- factor(amm$product, levels = c(
              "phnB", "rutB",
              "carA", "carB", "carB",
              "ureG", "ureC", "ureB", "ureA",
-             "amt_MTH_663", "amt3",
+             "amt1", "amt3",
              "amoY", "amoX", "amoC", "amoB", "amoA"))
 
-amm <- amm %>% filter(Culture %in% c('Ca. Nitrosocosmicus', 'Nitrosotalea 131'))
-amm[amm$Culture == 'Nitrosotalea 131',]$Culture <- 'Nitrosotalea'
+# add nirk based on copper center alignments
+nirk <- exp[exp$locus_tag %in% c('EC11NC_v1_2240', 'EC131NT_v1_0051'),]
+nirk$product_short <- 'nirK'
 
-amo.plot <- ggplot(amm[amm$product_short %in% c("amoA", "amoB", "amoC", "amoX", "amoY"),], aes(x = Sample, y = product_short, fill = TPM)) + 
+# combine
+amm <- rbind(amm, nirk)
+
+amm <- amm %>% filter(Culture %in% c('Ca. Nitrosocosmicus', 'Nitrosotalea 131'))
+amm[amm$Culture == 'Nitrosotalea 131',]$Culture <- 'Ca. Nitrosotalea'
+amm[amm$Culture == 'Ca. Nitrosocosmicus',]$Culture <- 'Ca. Nitrosocosmicus'
+
+amo.plot <-ggplot(amm[amm$product_short %in% c("amoA", "amoB", "amoC", "amoX", "amoY"),], aes(x = Sample, y = product_short, fill = TPM)) + 
   geom_tile() + 
   geom_vline(xintercept = 3.5, linetype = 'dashed') + 
   geom_vline(xintercept = 6.5, linetype = 'dashed') + 
@@ -58,7 +66,7 @@ amo.plot <- ggplot(amm[amm$product_short %in% c("amoA", "amoB", "amoC", "amoX", 
   ylab('') +
   ggtitle('Ammonia Monooxygenase Transcripts') + 
   scale_fill_continuous(name = 'TPM', low = colors[3], high = colors[2], na.value = 'grey90', limits = c(0.1, 3e5), breaks = c(1e5, 2e5, 3e5), labels = c("100000", "200000", "300000")) +
-  facet_wrap(vars(Culture), ncol=1) + 
+  facet_wrap(vars(Culture), nrow=1) + 
   theme_classic() +
   theme(aspect.ratio = 1,
         panel.spacing=unit(0, "lines"),
@@ -73,6 +81,13 @@ amo.plot
 
 other.amm.genes <- setdiff(amm, amm[amm$product_short %in% c("amoA", "amoB", "amoC", "amoX", "amoY"),])
 
+other.amm.genes$product_short <- factor(other.amm.genes$product_short, levels=c("GPI", "P-II", "GDH", "GS", "GOGAT", "GTL", 
+                                                                  "phnB", "rutB",
+                                                                  "carA", "carB",
+                                                                  'nirK',
+                                                                  "ureG", "ureC", "ureB", "ureA",
+                                                                  "amt3", "amt1"))
+
 other.amm <- ggplot(other.amm.genes, aes(x = Sample, y = product_short, fill = TPM)) + 
   geom_tile() + 
   geom_vline(xintercept = 3.5, linetype = 'dashed') + 
@@ -83,7 +98,7 @@ other.amm <- ggplot(other.amm.genes, aes(x = Sample, y = product_short, fill = T
   ylab('') +
   ggtitle('Ammonia Oxidation Transcripts') + 
   scale_fill_continuous(name = 'TPM', low = colors[3], high = colors[2], na.value = 'grey90', limits=c(0.1,1e5)) +
-  facet_wrap(vars(Culture), ncol=1) + 
+  facet_wrap(vars(Culture), nrow=1) + 
   theme_classic() +
   theme(aspect.ratio = 1,
         panel.spacing=unit(0, "lines"),
