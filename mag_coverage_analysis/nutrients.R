@@ -1,18 +1,28 @@
 
-nutrients <- read.csv('nutrients.pd.csv')
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+
+nutrients <- read.csv('mag_coverage_analysis/nutrients.pd.csv')
 
 nitrogen <- nutrients %>% select(season2, depth, NH4, NO3)
 nitrogen <- pivot_longer(nitrogen, cols = c(-season2, -depth), names_to = 'Nutrient', values_to = 'Volume')
 nitrogen <- nitrogen %>% group_by(season2, depth, Nutrient) %>% summarise(avg_volume = mean(Volume), sd_volume = sd(Volume))
 
-ggplot(nitrogen[nitrogen$depth == '05-10 cm',], aes(x = season2, y = avg_volume, col = Nutrient, shape = Nutrient)) + 
+ggplot(nitrogen, aes(x = season2, y = avg_volume, col = Nutrient, shape = Nutrient)) + 
   geom_point(size = 3) + 
   geom_line(aes(group = Nutrient), linewidth = 1) + 
   geom_errorbar(aes(min = avg_volume, max = avg_volume + sd_volume, width = 0), linewidth = 1) + 
+  facet_wrap(vars(depth), scales = "free") +
   xlab('') + 
   ylab('') + 
   theme_classic() 
 
+nitrogen.drought <- nitrogen %>% filter(season2 %in% c("18-Apr", "18-Jun", "18-Aug", "18-Oct"))
+
+ggplot(nitrogen.drought, aes(x = season2, y=avg_volume, col = Nutrient, shape = Nutrient)) +
+  geom_point() +
+  facet_wrap(vars(depth), scales = "free")
 ## relationship between amoC expression and NO3 variation
 
 ao.sums$season2 <- NA

@@ -3,17 +3,15 @@ library(ggplot2)
 
 setwd('~/aoa_mags/mag_coverage_analysis')
 
-ec133 <- read.csv('ec133_mage_coverage.csv')
 ec131 <- read.csv('ec131_mage_coverage.csv')
 ec11 <- read.csv('ec11_mage_coverage.csv')
-ec5 <- read.csv('ec5_mage_coverage.csv')
 
-coverage <- rbind(ec5, ec11, ec131, ec133)
+coverage <- rbind(ec11, ec131)
 
 # tpm
 
 time_points <- c('Apr_PD1', 'Apr_PD2', 'Apr_PD3', 'Aug_PD1', 'Aug_PD2', 'Aug_PD3', 'Oct_PD1', 'Oct_PD2', 'Oct_PD3')
-cultures <- c('Ca. Nitrosocosmicus', 'Nitrosotalea 5', 'Nitrosotalea 131', 'Nitrosotalea 133')
+cultures <- c('Nitrosocosmicus', 'Nitrosotalea EC131')
 
 data.long <- pivot_longer(coverage, cols = -c('locus_tag', 'length', 'product', 'Total', 'Culture'), names_to = 'Sample', values_to = 'Reads')
 
@@ -34,27 +32,18 @@ for(i in cultures){
 
 data.long <- data.long %>% mutate(TPM = reads_per_kb_length/per_million_factor)
 
-# scale by number of reads mapped - not necessary because TPM is already scaled
+data.long$product <- URLdecode(data.long$product)
 
-data.long$mrna_reads <- NA
+write.csv(data.long, 'transcript_hits_tpm.csv', row.names = FALSE)
 
-ec131_cov <- read.csv('~/aoa_mags/featurecounts_mage/ec133_coverage_stats.csv') %>% select(Assigned)
-ec131_cov$Sample <- time_points
-for(i in time_points){
-  val <- ec131_cov[ec131_cov$Sample == i,]$Assigned
-  data.long[data.long$Culture == 'Nitrosotalea 133' & data.long$Sample == i,]$mrna_reads <- val
-}
+#### evaluating most highly transcribed genes
 
-data.long <- data.long %>% mutate(TPM_Scaled_ReadsAssigned = TPM/mrna_reads)
+transcripts <- read.csv("transcript_hits_tpm.csv")
 
-data.long.pos <- data.long %>% filter(TPM_Scaled_ReadsAssigned > 0)
+transcripts.avg <- transcripts %>% filter(Culture %in% c("Nitrosotalea EC131", "Nitrosocosmicus")) %>%
+  group_by(Culture, locus_tag, product) %>%
+  summarise(mean = mean(TPM), sd = sd(TPM))
 
-write.csv(data.long.pos, 'transcript_hits_tpm_scaled.csv', row.names = FALSE)
-write.csv(data.long, 'transcript_hits_tpm_scaled_full.csv', row.names = FALSE)
+transcripts.avg.nc <- transcripts.avg %>% filter(Culture == "Nitrosocosmicus") %>% arrange(desc(mean))
 
-
-#### removing scaling data
-
-transcripts_hits <- transcript_hits_tpm_scaled_full %>% dplyr::select(-mrna_reads, -TPM_Scaled_ReadsAssigned, -GenomeLength, -mrna_reads_per_genome_length, -tpm_scaled_reads_genome)
-
-write.csv(transcripts_hits, 'transcript_hits_tpm.csv', row.names = FALSE)
+transcripts.avg.nt <- transcripts.avg %>% filter(Culture == "Nitrosotalea EC131") %>% arrange(desc(mean))

@@ -18,23 +18,22 @@ write.csv(exp, 'transcript_hits_tpm.csv', row.names = FALSE)
 
 expressed_genes_list <- read_excel("expressed_genes_list.xlsx")
 
-eg_annotated <- left_join(exp, expressed_genes_list, by = join_by('product' == 'Name'))
+eg_annotated <- left_join(exp, expressed_genes_list, by = join_by('product' == 'Name')) %>% filter(Total > 0)
 
 eg_annotated %>% filter(is.na(`Putative Pathway`) == TRUE) %>% dplyr::select(product) %>% unique() %>% count()
+eg_annotated %>% filter(is.na(`Putative Pathway`) == TRUE) %>% dplyr::select(product) %>% unique()
+
+eg_annotated_uq <- eg_annotated %>% select(locus_tag, product, `Putative Pathway`) %>% unique()
 
 ## manually editing incorrect merges
 
 eg_annotated[eg_annotated$product == 'Blue (Type1) copper domain-containing protein',]$`Putative Pathway` <- 'Copper oxidation'
-eg_annotated[eg_annotated$product == 'Blue (Type 1) copper domain protein',]$`Putative Pathway` <- 'Copper oxidation'
 eg_annotated[eg_annotated$product == 'Blue (Type 1) copper domain protein (Modular protein)',]$`Putative Pathway` <- 'Copper oxidation'
 eg_annotated[eg_annotated$product == '4Fe-4S binding domain protein',]$`Putative Pathway` <- 'Iron-sulfur cluster biosynthesis'
 eg_annotated[eg_annotated$product == 'Dentin sialophosphoprotein',]$`Putative Pathway` <- 'Secondary metabolite biosynthesis'
 eg_annotated[eg_annotated$product == '2,5-furandicarboxylate decarboxylase 1',]$`Putative Pathway` <- 'Secondary metabolism'
 eg_annotated[eg_annotated$product == '7,8-dihydro-6-hydroxymethylpterin dimethyltransferase',]$`Putative Pathway` <- 'Secondary metabolite biosynthesis'
 eg_annotated[eg_annotated$product == '7,8-dihydro-6-hydroxymethylpterin dimethyltransferase',]$Notes <- 'Methanopterin , found in Methanobacteria'
-eg_annotated[eg_annotated$product == 'chromosome segregation protein',]$`Putative Pathway` <- 'Cell division'
-eg_annotated[eg_annotated$product == 'Isocitrate dehydrogenase (NAD(+))',]$`Putative Pathway` <- 'TCA cycle'
-eg_annotated[eg_annotated$product == 'beta-1,2-mannobiose phosphorylase / 1,2-beta-oligomannan phosphorylase',]$`Putative Pathway` <- 'Secondary metabolism'
 eg_annotated[eg_annotated$product == 'putative dihydroorotate dehydrogenase B (NAD(+)), electron transfer subunit',]$`Putative Pathway` <- 'Respiration'
 
 eg_annotated$Date <- str_sub(eg_annotated$Sample, 1, 3)
@@ -96,7 +95,8 @@ biofilm_plot <- ggplot(biofilm.grouped, aes(x = Sample, y = Putative.Pathway, fi
   xlab('') +
   ylab('') +
   ggtitle('Biofilm-Related Transcripts') + 
-  scale_fill_continuous(name = 'TPM', low = colors[5], high = colors[6], na.value="grey90", limits = c(0.1, 50000)) +
+  scale_fill_continuous(name = 'TPM', low = colors[5], high = colors[6], na.value="grey90", limits = c(0.1, 50000),
+                        breaks=c(1e4, 2e4, 3e4, 4e4), labels=c("1e4", "2e4", "3e4", "4e4")) +
   facet_wrap(vars(Culture)) + 
   theme_classic() +
   theme(aspect.ratio = 1,
@@ -135,9 +135,20 @@ dunn_test(data = biofilm.stats[biofilm.stats$Culture == "Nitrosotalea" & biofilm
 
 stress <- eg_annotated %>% filter(Putative.Pathway %in% c('Chaperone', 'Nutrient storage', 'Stress protein', 'Antitoxin'), Culture %in% c('Nitrosotalea 131', 'Ca. Nitrosocosmicus'))
 
-stress[stress$Culture == 'Nitrosotalea 131',]$Culture <- 'Nitrosotalea'
-
 stress$Sample <- factor(stress$Sample, levels = c('Apr_PD1', 'Apr_PD2', 'Apr_PD3', 'Aug_PD1', 'Aug_PD2', 'Aug_PD3', 'Oct_PD1', 'Oct_PD2', 'Oct_PD3'))
+
+# add phaC and phaE to nutrient storage
+
+pha <- eg_annotated %>% filter(locus_tag %in% c("EC11NC_v1_0009", "EC11NC_v1_0010", "EC11_v1_0469", "EC11NC_v1_0549", 
+                                                "EC11NC_v1_1440", "EC11NC_v1_2801", "EC11NC_v1_2843", "EC11NC_v1_3027",
+                                                "EC11NC_v1_3181", "EC11NC_v1_3248", "EC11NC_v1_3259", "EC11NC_v1_3363",
+                                                "EC131NT_v1_1537", "EC131NT_v1_2103", "EC131NT_v1_2104", "EC131NT_v1_2105", 
+                                                "EC131NT_v1_2142"))
+pha$Putative.Pathway <- "Nutrient storage"
+
+stress <- rbind(stress, pha)
+
+stress[stress$Culture == 'Nitrosotalea 131',]$Culture <- 'Nitrosotalea'
 
 ggplot(stress, aes(x = Sample, y = product, fill = TPM)) + 
   geom_tile() + 
@@ -171,8 +182,9 @@ stress[stress$product %in% c('ATP-dependent RNA helicase DeaD', 'Ice-binding pro
 stress[stress$product %in% c('DNA protection during starvation protein', 'gamma-glutamyl hercynylcysteine S-oxide synthase',
                              'methionine sulfoxide reductase B', 'Non-heme bromoperoxidase BpoC',
                              'putative peroxiredoxin bcp', 'Superoxide dismutase [Mn]', 'Superoxide dismutase [Mn]', 'thioredoxin 1', 'Hypoxic response protein 1'),]$Type <- 'Oxidative'
-stress[stress$product %in% c('Phasin domain-containing protein', 'Phasin family protein', 'Phasin protein', 'putative Patatin-like phospholipase'),]$Type <- 'Nutrient storage'
+stress[stress$product %in% c('Phasin domain-containing protein', 'Phasin family protein', 'Phasin protein', 'putative Patatin-like phospholipase', "polyhydroxyalkanoate synthase subunit PhaC", "polyhydroxyalkanoate synthase subunit PhaE"),]$Type <- 'Nutrient storage'
 stress[stress$Putative.Pathway == 'Chaperone',]$Type <- 'Heat shock chaperones'
+stress[stress$Putative.Pathway == 'Nutrient storage',]$Type <- 'Nutrient storage'
 
 stress.grouped <- stress %>% group_by(Culture, Date, Sample, Type) %>% summarise(total = sum(TPM))
 
@@ -187,7 +199,8 @@ stress_plot <- ggplot(stress.grouped, aes(x = Sample, y = Type, fill = total)) +
   xlab('') +
   ylab('') +
   ggtitle('Stress-Related Transcripts') + 
-  scale_fill_continuous(name = 'TPM Scaled', low = colors[8], high = colors[7], limits = c(1, 75000), na.value="grey90") +
+  scale_fill_continuous(name = "TPM", low = colors[8], high = colors[7], limits = c(1, 120000), na.value="grey90",
+                        breaks=c(3e4, 6e4, 9e4), labels=c("3e4", "6e4", "9e4")) +
   facet_wrap(vars(Culture)) + 
   theme_classic() +
   theme(aspect.ratio = 1,
@@ -200,6 +213,8 @@ stress_plot <- ggplot(stress.grouped, aes(x = Sample, y = Type, fill = total)) +
         panel.border = element_rect(color = "black", fill = NA, linewidth = 1))
 
 stress_plot
+
+stress.phasins <- stress %>% filter(Type == "Nutrient storage", Reads > 0)
 
 #### stress statistics
 stress.stats <- stress.grouped %>% ungroup()
@@ -263,6 +278,7 @@ dunn_test(stress.stats[stress.stats$Culture == 'Nitrosotalea' &
 water_table <- read.csv('water_table_summary.csv') %>% filter(Site == 'PD')
 library(lubridate)
 library(stringr)
+library(readxl)
 water_table$Date2 <- str_replace(water_table$Date, '^00', '20')
 water_table$Date2 <- ymd(water_table$Date2)
 
@@ -293,6 +309,7 @@ water_table %>% mutate(month = month(Date2), year = year(Date2)) %>% group_by(mo
   summarise(mean = mean(GW_level), sd = sd(GW_level))
 
 redox <- read_xlsx('Redox_potential_all.xlsx', sheet = 'Redox_potential_all')
+redox$Date <- as.Date(redox$Date)
 redox.pd <- redox %>% filter(Site == 'PD', Date %in% c('2018-04-20', '2018-08-09', '2018-10-02'))
 redox.pd$Season3 <- NA
 redox.pd[redox.pd$Date == '2018-04-20',]$Season3 <- 'Apr'
@@ -351,11 +368,11 @@ soil_temp_pd %>% mutate(month = month(day), year = year(day)) %>% group_by(month
 ## assembling figure
 
 library(cowplot)
-grid1 <- plot_grid(water_fig, temp_fig, redox_fig, align = 'hv', ncol=1)
+grid1 <- plot_grid(water_fig, temp_fig, redox_fig, align = 'hv', nrow=1)
 
 grid2 <- plot_grid(biofilm_plot, stress_plot, align = 'hv', ncol = 1)
 
 grid1
 grid2
 
-plot_grid(biofilm_plot, stress_plot, grid1, ncol = 1)
+plot_grid(biofilm_plot, stress_plot, grid1, nrow = 1)

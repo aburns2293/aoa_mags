@@ -8,7 +8,7 @@ library(tidyverse)
 # ammonia oxidation
 setwd("mag_coverage_analysis")
 
-exp <- read.csv("annotated_transcript_hits_tpm.csv")
+exp <- read.csv("transcript_hits_tpm.csv")
 
 ## manual annotations
 
@@ -52,9 +52,8 @@ nirk$product_short <- 'nirK'
 # combine
 amm <- rbind(amm, nirk)
 
-amm <- amm %>% filter(Culture %in% c('Ca. Nitrosocosmicus', 'Nitrosotalea 131'))
-amm[amm$Culture == 'Nitrosotalea 131',]$Culture <- 'Ca. Nitrosotalea'
-amm[amm$Culture == 'Ca. Nitrosocosmicus',]$Culture <- 'Ca. Nitrosocosmicus'
+amm[amm$Culture == 'Nitrosotalea 131',]$Culture <- 'Ca. Nitrosotalea inundata'
+amm[amm$Culture == 'Nitrosocosmicus',]$Culture <- 'Ca. Nitrosocosmicus percolatus'
 
 amo.plot <-ggplot(amm[amm$product_short %in% c("amoA", "amoB", "amoC", "amoX", "amoY"),], aes(x = Sample, y = product_short, fill = TPM)) + 
   geom_tile() + 
@@ -65,7 +64,9 @@ amo.plot <-ggplot(amm[amm$product_short %in% c("amoA", "amoB", "amoC", "amoX", "
   xlab('') +
   ylab('') +
   ggtitle('Ammonia Monooxygenase Transcripts') + 
-  scale_fill_continuous(name = 'TPM', low = colors[3], high = colors[2], na.value = 'grey90', limits = c(0.1, 3e5), breaks = c(1e5, 2e5, 3e5), labels = c("100000", "200000", "300000")) +
+  scale_fill_continuous(name = 'TPM', low = colors[3], high = colors[2], na.value = 'grey90', limits = c(0.1, 2.3e5),
+                        breaks = c(5e4, 1e5, 1.5e5, 2e5),
+                        labels = c("5e4", "1e5", "1.5e5", "2e5")) +
   facet_wrap(vars(Culture), nrow=1) + 
   theme_classic() +
   theme(aspect.ratio = 1,
@@ -97,7 +98,8 @@ other.amm <- ggplot(other.amm.genes, aes(x = Sample, y = product_short, fill = T
   xlab('') +
   ylab('') +
   ggtitle('Ammonia Oxidation Transcripts') + 
-  scale_fill_continuous(name = 'TPM', low = colors[3], high = colors[2], na.value = 'grey90', limits=c(0.1,1e5)) +
+  scale_fill_continuous(name = 'TPM', low = colors[3], high = colors[2], na.value = 'grey90', limits=c(0.1, 1.8e5),
+                        breaks=c(5e4, 1e5, 1.5e5), labels=c("5e4", "1e5", "1.5e5")) +
   facet_wrap(vars(Culture), nrow=1) + 
   theme_classic() +
   theme(aspect.ratio = 1,
@@ -111,7 +113,7 @@ other.amm <- ggplot(other.amm.genes, aes(x = Sample, y = product_short, fill = T
 
 other.amm
 
-plot_grid(amo.plot, other.amm, align = "hv", nrow = 1)
+plot_grid(amo.plot, other.amm, align = "hv", ncol = 1)
 
 # comparison with no3
 
