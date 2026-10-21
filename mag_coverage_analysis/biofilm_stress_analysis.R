@@ -8,6 +8,8 @@ library(cowplot)
 
 setwd('~/aoa_mags/mag_coverage_analysis')
 
+hits <- read.csv('transcript_hits_tpm.csv')
+
 eg_annotated <- read.csv('annotated_transcript_hits_tpm.csv')
 
 ## stress
@@ -16,13 +18,19 @@ stress <- eg_annotated %>% filter(`Putative.Pathway` %in% c('Chaperone', 'Nutrie
 
 stress$Sample <- factor(stress$Sample, levels = c('Apr_PD1', 'Apr_PD2', 'Apr_PD3', 'Aug_PD1', 'Aug_PD2', 'Aug_PD3', 'Oct_PD1', 'Oct_PD2', 'Oct_PD3'))
 
-# add phaC and phaE to nutrient storage
+# add phaC, phaE, phaP to nutrient storage
 
 pha <- eg_annotated %>% filter(locus_tag %in% c("EC11NC_v1_0009", "EC11NC_v1_0010", "EC11_v1_0469", "EC11NC_v1_0549", 
                                                 "EC11NC_v1_1440", "EC11NC_v1_2801", "EC11NC_v1_2843", "EC11NC_v1_3027",
                                                 "EC11NC_v1_3181", "EC11NC_v1_3248", "EC11NC_v1_3259", "EC11NC_v1_3363",
                                                 "EC131NT_v1_1537", "EC131NT_v1_2103", "EC131NT_v1_2104", "EC131NT_v1_2105", 
                                                 "EC131NT_v1_2142"))
+
+#phaE is present but never expressed, add from unannotated transcript file
+
+phaE <- hits[str_detect(hits$product, 'PhaE') == TRUE,]
+
+pha <- full_join(pha, phaE)
 pha$Putative.Pathway <- "Nutrient storage"
 
 stress <- rbind(stress, pha)
@@ -50,6 +58,16 @@ ggplot(stress, aes(x = Sample, y = product, fill = TPM)) +
 stress <- stress %>% filter(product != 'PAC2 family protein', product != 'prefoldin alpha subunit', product != 'Prefoldin subunit alpha',
                             product != 'Prefoldin subunit beta', product != 'peptidyl-prolyl cis-trans isomerase B (cyclophilin B)',
                             product != 'OmpH family outer membrane protein')
+
+stress.full <- stress$product %>% unique()
+stress.short <- c('dps', 'hsp20', 'thsB', 'mnSOD', 'RCF3', 'AHSA1', 'MPGS', 'pemK/mazF', 'dnaK',
+                  'dnaJ', 'csbD', 'hrp1', 'hrtA', 'ths', 'PNPLA', 'phaP', 'uspA',
+                  'phaP', 'shsp', 'thsA', 'trx1', 'ibp', 'usp', 'phaC', 'phaE', 'phaE')
+
+stress.rename <- cbind(stress.full, stress.short) %>% as.data.frame() %>% rename(product = stress.full,
+                                                                                 short_name = stress.short)
+
+stress <- left_join(stress, stress.rename, by = 'product')
 
 stress$Type <- 'NA'
 
@@ -79,8 +97,8 @@ stress_plot <- ggplot(stress.grouped, aes(x = Sample, y = Type, fill = total)) +
   xlab('') +
   ylab('') +
   ggtitle('Stress-Related Transcripts') + 
-  scale_fill_continuous(name = "TPM", low = colors[8], high = colors[7], limits = c(1, 200000), na.value="grey90",
-                        breaks=c(3e4, 6e4, 9e4), labels=c("3e4", "6e4", "9e4")) +
+  #scale_fill_continuous(name = "TPM", low = colors[8], high = colors[7], limits = c(1, 200000), na.value="grey90",
+  #                      breaks=c(3e4, 6e4, 9e4), labels=c("3e4", "6e4", "9e4")) +
   facet_wrap(vars(Culture)) + 
   theme_classic() +
   theme(aspect.ratio = 1,
@@ -96,7 +114,7 @@ stress_plot
 
 ## need to adjust so that genes that are present but not expressed are still there
 
-stress_plot_2 <- ggplot(stress, aes(x = Sample, y = product, fill = TPM)) + 
+stress_plot_2 <- ggplot(stress, aes(x = Sample, y = short_name, fill = TPM)) + 
   geom_tile() + 
   geom_vline(xintercept = 3.5, linetype = 'dashed') + 
   geom_vline(xintercept = 6.5, linetype = 'dashed') + 
