@@ -8,132 +8,11 @@ library(cowplot)
 
 setwd('~/aoa_mags/mag_coverage_analysis')
 
-exp <- read.csv('transcript_hits_tpm.csv')
+eg_annotated <- read.csv('annotated_transcript_hits_tpm.csv')
 
-exp$product <- URLdecode(exp$product)
-
-write.csv(exp, 'transcript_hits_tpm.csv', row.names = FALSE)
-
-##### merge with annotated list
-
-expressed_genes_list <- read_excel("expressed_genes_list.xlsx")
-
-eg_annotated <- left_join(exp, expressed_genes_list, by = join_by('product' == 'Name')) %>% filter(Total > 0)
-
-eg_annotated %>% filter(is.na(`Putative Pathway`) == TRUE) %>% dplyr::select(product) %>% unique() %>% count()
-eg_annotated %>% filter(is.na(`Putative Pathway`) == TRUE) %>% dplyr::select(product) %>% unique()
-
-eg_annotated_uq <- eg_annotated %>% select(locus_tag, product, `Putative Pathway`) %>% unique()
-
-## manually editing incorrect merges
-
-eg_annotated[eg_annotated$product == 'Blue (Type1) copper domain-containing protein',]$`Putative Pathway` <- 'Copper oxidation'
-eg_annotated[eg_annotated$product == 'Blue (Type 1) copper domain protein (Modular protein)',]$`Putative Pathway` <- 'Copper oxidation'
-eg_annotated[eg_annotated$product == '4Fe-4S binding domain protein',]$`Putative Pathway` <- 'Iron-sulfur cluster biosynthesis'
-eg_annotated[eg_annotated$product == 'Dentin sialophosphoprotein',]$`Putative Pathway` <- 'Secondary metabolite biosynthesis'
-eg_annotated[eg_annotated$product == '2,5-furandicarboxylate decarboxylase 1',]$`Putative Pathway` <- 'Secondary metabolism'
-eg_annotated[eg_annotated$product == '7,8-dihydro-6-hydroxymethylpterin dimethyltransferase',]$`Putative Pathway` <- 'Secondary metabolite biosynthesis'
-eg_annotated[eg_annotated$product == '7,8-dihydro-6-hydroxymethylpterin dimethyltransferase',]$Notes <- 'Methanopterin , found in Methanobacteria'
-eg_annotated[eg_annotated$product == 'putative dihydroorotate dehydrogenase B (NAD(+)), electron transfer subunit',]$`Putative Pathway` <- 'Respiration'
-
-eg_annotated$Date <- str_sub(eg_annotated$Sample, 1, 3)
-
-write.csv(eg_annotated, 'annotated_transcript_hits_tpm.csv', row.names = FALSE)
-
-## evaluating different groups
-
-ggplot(eg_annotated[eg_annotated$Culture != 'Nitrosotalea 5',], aes(x = Date, y = TPM, col = Culture)) + geom_point() + facet_wrap(vars(`Putative Pathway`), scales = 'free') +
-  theme_classic()
-
-## biofilm-related
-
-eg_annotated <- read.csv('mag_coverage_analysis/annotated_transcript_hits_tpm.csv')
-
-biofilm <- eg_annotated %>% filter(Putative.Pathway %in% c('Adhesion', 'Motility', 'Quorum sensing', 'Signaling'), Culture %in% c('Nitrosotalea 131', 'Ca. Nitrosocosmicus')) %>% arrange(`Putative.Pathway`)
-
-biofilm_loci <- biofilm %>% select(product, locus_tag, Putative.Pathway) %>% unique()
-biofilm$Sample <- factor(biofilm$Sample, levels = c('Apr_PD1', 'Apr_PD2', 'Apr_PD3', 'Aug_PD1', 'Aug_PD2', 'Aug_PD3', 'Oct_PD1', 'Oct_PD2', 'Oct_PD3'))
-biofilm$product <- factor(biofilm$product, levels = c('3-hydroxy-2,4-pentadione 5-phosphate thiolase',
-                                                      'Late endosomal/lysosomal adaptor and MAPK and MTOR activator 5',
-                                                      'MEDS domain-containing protein',
-                                                      'Adenylate and Guanylate cyclase catalytic domain protein',
-                                                      'Adenylate cyclase 2',
-                                                      'ArnR1-like winged helix-turn-helix domain-containing protein',
-                                                      'Flagellin',
-                                                      'Spondin_N',
-                                                      'WxL domain-containing protein',
-                                                      'HYR domain-containing protein',
-                                                      'F5/8 type C domain protein',
-                                                      'Archaeal Type IV pilin N-terminal domain-containing protein'))
-biofilm$Type <- 'NA'
-
-biofilm[biofilm$product %in% c('3-hydroxy-2,4-pentadione 5-phosphate thiolase'),]$Type <- 'Quorum sensing'
-biofilm[biofilm$product %in% c('Late endosomal/lysosomal adaptor and MAPK and MTOR activator 5',
-                               'MEDS domain-containing protein',
-                               'Adenylate and Guanylate cyclase catalytic domain protein',
-                               'Adenylate cyclase 2'),]$Type <- 'Signaling'
-biofilm[biofilm$product %in% c('ArnR1-like winged helix-turn-helix domain-containing protein',
-                               'Flagellin'),]$Type <- 'Motility'
-biofilm[biofilm$product %in% c('Spondin_N',
-                               'WxL domain-containing protein',
-                               'HYR domain-containing protein',
-                               'F5/8 type C domain protein',
-                               'Archaeal Type IV pilin N-terminal domain-containing protein'),]$Type <- 'Adhesion'
-
-biofilm[biofilm$Culture == 'Nitrosotalea 131',]$Culture <- 'Nitrosotalea'
-
-biofilm.grouped <- biofilm %>% group_by(Culture, Date, Sample, Putative.Pathway) %>% summarise(total = sum(TPM))
-
-colors <- met.brewer('Thomas')
-
-biofilm_plot <- ggplot(biofilm.grouped, aes(x = Sample, y = Putative.Pathway, fill = total)) + 
-  geom_tile() + 
-  geom_vline(xintercept = 3.5, linetype = 'dashed') + 
-  geom_vline(xintercept = 6.5, linetype = 'dashed') + 
-  scale_x_discrete(labels = c('', 'Apr', '', '', 'Aug', '', '', 'Oct', ''), expand = c(0,0), drop = FALSE) +
-  scale_y_discrete(expand = c(0,0)) + 
-  xlab('') +
-  ylab('') +
-  ggtitle('Biofilm-Related Transcripts') + 
-  scale_fill_continuous(name = 'TPM', low = colors[5], high = colors[6], na.value="grey90", limits = c(0.1, 50000),
-                        breaks=c(1e4, 2e4, 3e4, 4e4), labels=c("1e4", "2e4", "3e4", "4e4")) +
-  facet_wrap(vars(Culture)) + 
-  theme_classic() +
-  theme(aspect.ratio = 1,
-        panel.spacing=unit(0, "lines"),
-        axis.text.x = element_text(size = 14),
-        axis.text.y = element_text(size = 12),
-        title = element_text(size = 14),
-        legend.text = element_text(size = 14),
-        strip.text = element_text(size = 12),
-        panel.border = element_rect(color = "black", fill = NA, linewidth = 1))
-biofilm_plot
-
-biofilm.stats <- biofilm.grouped %>% ungroup()
-
-biofilm %>% group_by(Culture, Putative.Pathway, product) %>% select(locus_tag) %>% unique() %>% summarise(n = n())
-
-# NT biofilm statistics
-
-ggplot(data = biofilm.stats[biofilm.stats$Culture == "Nitrosotalea" & biofilm.stats$Putative.Pathway == "Adhesion",],
-       aes(x = Date, y = total)) +
-  geom_boxplot()
-
-kruskal.test(total ~ Date, data = biofilm.stats[biofilm.stats$Culture == "Nitrosotalea" & biofilm.stats$Putative.Pathway == "Adhesion",])
-dunn_test(data = biofilm.stats[biofilm.stats$Culture == "Nitrosotalea" & biofilm.stats$Putative.Pathway == "Adhesion",],
-          formula = total ~ Date, p.adjust.method = "BH")
-
-
-ggplot(data = biofilm.stats[biofilm.stats$Culture == "Nitrosotalea" & biofilm.stats$Putative.Pathway == "Motility",],
-       aes(x = Date, y = total)) +
-  geom_boxplot()
-
-kruskal.test(total ~ Date, data = biofilm.stats[biofilm.stats$Culture == "Nitrosotalea" & biofilm.stats$Putative.Pathway == "Motility",])
-dunn_test(data = biofilm.stats[biofilm.stats$Culture == "Nitrosotalea" & biofilm.stats$Putative.Pathway == "Motility",],
-          formula = total ~ Date, p.adjust.method = "BH")
 ## stress
 
-stress <- eg_annotated %>% filter(Putative.Pathway %in% c('Chaperone', 'Nutrient storage', 'Stress protein', 'Antitoxin'), Culture %in% c('Nitrosotalea 131', 'Ca. Nitrosocosmicus'))
+stress <- eg_annotated %>% filter(`Putative.Pathway` %in% c('Chaperone', 'Nutrient storage', 'Stress protein', 'Antitoxin'))
 
 stress$Sample <- factor(stress$Sample, levels = c('Apr_PD1', 'Apr_PD2', 'Apr_PD3', 'Aug_PD1', 'Aug_PD2', 'Aug_PD3', 'Oct_PD1', 'Oct_PD2', 'Oct_PD3'))
 
@@ -148,7 +27,9 @@ pha$Putative.Pathway <- "Nutrient storage"
 
 stress <- rbind(stress, pha)
 
-stress[stress$Culture == 'Nitrosotalea 131',]$Culture <- 'Nitrosotalea'
+stress[stress$Culture == 'Nitrosotalea EC131',]$Culture <- 'Nitrosotalea'
+
+colors <- met.brewer('Thomas')
 
 ggplot(stress, aes(x = Sample, y = product, fill = TPM)) + 
   geom_tile() + 
@@ -177,7 +58,6 @@ stress[stress$product %in% c('Antitoxin SocA-like Panacea domain-containing prot
 stress[stress$product %in% c('General stress protein CsbD',
                              'Universal stress protein', 'Universal stress protein family protein', 'UspA domain-containing protein'),]$Type <- 'Universal'
 stress[stress$product %in% c('Mannosyl-3-phosphoglycerate synthase', 'putative RNA-binding protein containing KH domain', 'serine protease Do'),]$Type <- 'Heat'
-stress[stress$product %in% c('membrane protein HdeD'),]$Type <- 'Acid'
 stress[stress$product %in% c('ATP-dependent RNA helicase DeaD', 'Ice-binding protein'),]$Type <- 'Cold'
 stress[stress$product %in% c('DNA protection during starvation protein', 'gamma-glutamyl hercynylcysteine S-oxide synthase',
                              'methionine sulfoxide reductase B', 'Non-heme bromoperoxidase BpoC',
@@ -199,7 +79,7 @@ stress_plot <- ggplot(stress.grouped, aes(x = Sample, y = Type, fill = total)) +
   xlab('') +
   ylab('') +
   ggtitle('Stress-Related Transcripts') + 
-  scale_fill_continuous(name = "TPM", low = colors[8], high = colors[7], limits = c(1, 120000), na.value="grey90",
+  scale_fill_continuous(name = "TPM", low = colors[8], high = colors[7], limits = c(1, 200000), na.value="grey90",
                         breaks=c(3e4, 6e4, 9e4), labels=c("3e4", "6e4", "9e4")) +
   facet_wrap(vars(Culture)) + 
   theme_classic() +
@@ -214,6 +94,32 @@ stress_plot <- ggplot(stress.grouped, aes(x = Sample, y = Type, fill = total)) +
 
 stress_plot
 
+## need to adjust so that genes that are present but not expressed are still there
+
+stress_plot_2 <- ggplot(stress, aes(x = Sample, y = product, fill = TPM)) + 
+  geom_tile() + 
+  geom_vline(xintercept = 3.5, linetype = 'dashed') + 
+  geom_vline(xintercept = 6.5, linetype = 'dashed') + 
+  scale_x_discrete(labels = c('', 'Apr', '', '', 'Aug', '', '', 'Oct', ''), expand = c(0,0), drop = FALSE) +
+  scale_y_discrete(expand = c(0,0)) + 
+  xlab('') +
+  ylab('') +
+  ggtitle('Stress-Related Transcripts') + 
+  scale_fill_continuous(name = "TPM", low = colors[8], high = colors[7], limits=c(1,80000),na.value="grey90")+
+                        #breaks=c(3e4, 6e4, 9e4), labels=c("3e4", "6e4", "9e4")) +
+  facet_wrap(vars(Culture)) + 
+  theme_classic() +
+  theme(#aspect.ratio = 1,
+        panel.spacing=unit(0, "lines"),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 12),
+        title = element_text(size = 14),
+        legend.text = element_text(size = 14),
+        strip.text = element_text(size = 12),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 1))
+
+stress_plot_2
+
 stress.phasins <- stress %>% filter(Type == "Nutrient storage", Reads > 0)
 
 #### stress statistics
@@ -221,35 +127,35 @@ stress.stats <- stress.grouped %>% ungroup()
 
 # NC
 
-ggplot(stress.stats[stress.stats$Culture == 'Ca. Nitrosocosmicus' & 
+ggplot(stress.stats[stress.stats$Culture == 'Nitrosocosmicus' & 
                       stress.stats$Type == 'Universal',], aes(x = Date, y = total)) + geom_boxplot()
-kruskal.test(stress.stats[stress.stats$Culture == 'Ca. Nitrosocosmicus' & 
+kruskal.test(stress.stats[stress.stats$Culture == 'Nitrosocosmicus' & 
                             stress.stats$Type == 'Universal',], total ~ Date)
-dunn_test(stress.stats[stress.stats$Culture == 'Ca. Nitrosocosmicus' & 
+dunn_test(stress.stats[stress.stats$Culture == 'Nitrosocosmicus' & 
                          stress.stats$Type == 'Universal',], total ~ Date,
           p.adjust.method = 'BH')
 
-kruskal.test(stress.stats[stress.stats$Culture == 'Ca. Nitrosocosmicus' & 
+kruskal.test(stress.stats[stress.stats$Culture == 'Nitrosocosmicus' & 
                             stress.stats$Type == 'Oxidative',], total ~ Date)
-dunn_test(stress.stats[stress.stats$Culture == 'Ca. Nitrosocosmicus' & 
+dunn_test(stress.stats[stress.stats$Culture == 'Nitrosocosmicus' & 
                          stress.stats$Type == 'Oxidative',], total ~ Date,
           p.adjust.method = 'BH')
 
-kruskal.test(stress.stats[stress.stats$Culture == 'Ca. Nitrosocosmicus' & 
+kruskal.test(stress.stats[stress.stats$Culture == 'Nitrosocosmicus' & 
                             stress.stats$Type == 'Nutrient storage',], total ~ Date)
-dunn_test(stress.stats[stress.stats$Culture == 'Ca. Nitrosocosmicus' & 
+dunn_test(stress.stats[stress.stats$Culture == 'Nitrosocosmicus' & 
                          stress.stats$Type == 'Nutrient storage',], total ~ Date,
           p.adjust.method = 'BH')
 
-kruskal.test(stress.stats[stress.stats$Culture == 'Ca. Nitrosocosmicus' & 
+kruskal.test(stress.stats[stress.stats$Culture == 'Nitrosocosmicus' & 
                             stress.stats$Type == 'Heat shock chaperones',], total ~ Date)
-dunn_test(stress.stats[stress.stats$Culture == 'Ca. Nitrosocosmicus' & 
+dunn_test(stress.stats[stress.stats$Culture == 'Nitrosocosmicus' & 
                          stress.stats$Type == 'Heat shock chaperones',], total ~ Date,
           p.adjust.method = 'BH')
 
-kruskal.test(stress.stats[stress.stats$Culture == 'Ca. Nitrosocosmicus' & 
+kruskal.test(stress.stats[stress.stats$Culture == 'Nitrosocosmicus' & 
                             stress.stats$Type == 'Heat',], total ~ Date)
-dunn_test(stress.stats[stress.stats$Culture == 'Ca. Nitrosocosmicus' & 
+dunn_test(stress.stats[stress.stats$Culture == 'Nitrosocosmicus' & 
                          stress.stats$Type == 'Heat',], total ~ Date,
           p.adjust.method = 'BH')
 
