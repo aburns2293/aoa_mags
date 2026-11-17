@@ -1,0 +1,521 @@
+---
+title: Pipeline for mapping metatranscriptomes onto AOA MAGs and CAZymes
+output: html_document
+author: Anna Burns
+date: 13.03.2025
+---
+
+```{r setup, include=FALSE}
+
+library(formatR)
+
+knitr::opts_chunk$set(tidy.opts = list(width.cutoff = 60), tidy = TRUE)
+
+```
+
+### Preparation: Creating conda environments with necessary packages
+
+You will need the following conda packages for this script, which are available in the Bioconda channel:
+
+- minimap2
+- samtools
+- dbcan
+- Diamond
+- barrnap
+- pyani-plus
+- seaborn
+- mummer
+- hmmer
+
+As well as the following Python packages: biopython, pandas and biolib.
+
+```{bash, eval = FALSE}
+# Preparation: create conda environment with necessary packages
+# Language: BASH (copy and paste to run in terminal)
+# Note: only run this if you do not have the packages in your current instance/conda environment
+
+conda init bash
+source ~/.bashrc
+conda create -n mag_mapper -c bioconda -c conda-forge minimap2 samtools diamond dbcan barrnap pyani-plus seaborn mummer hmmer
+conda activate mag_mapper
+
+# If you do not have the Python packages biopython and pandas installed, please run:
+pip install biopython
+pip install pandas
+pip install biolib
+```
+
+# Mapping metatranscriptome onto annotated genomes
+
+### Create bowtie2 dictionaries from the MAG fasta file
+
+```{bash, eval = FALSE}
+# create bowtie2 dictionaries from MAG fasta files
+# Language: BASH
+# Requirements: bowtie2
+# Input: MAG fasta files (.fasta)
+# Output: bowtie2 dictionaries (.bt2)
+
+bowtie2-build -f ../contig_fasta/11_contig_2.fasta, ../contig_fasta/13_21_contig_1.fasta bowtie_aoa 
+
+```
+
+### Map metatranscriptomes onto MAG dictionaries
+
+```{bash, eval = FALSE}
+# Map metatranscriptome sto MAG dictionaries
+# Language: Bash
+# Requirements: bowtie2
+# Input: MAG fasta file (.fasta), metatranscriptome fasta file (.fasta)
+# Output: MAG to metatranscriptome mapping file (.sam)
+
+for file in metatranscriptomes/*.fasta; do
+  # get the base name of the file
+  read_base=$(basename $file .fasta)
+  # run the mapping script
+  bowtie2 -f --sensitive -p 8 -x bowtie_aoa -U $file -S $read_base.sam;
+done
+
+```
+
+### Transform mapping file to sorted, indexed bam file
+
+```{bash, eval = FALSE}
+# Transform mapping file to sorted, indexed bam file
+# Language: BASH
+# Requirements: samtools
+# Input: MAG to metatranscriptome mapping file (.sam)
+# Output: sorted and indexed bam file of mapping file (.sorted.bam)
+
+for f in *.sam
+do
+  base=$(basename $f .sam)
+  samtools view -Sb $base.sam > $base.bam
+done
+
+for f in *.bam
+do
+  base=$(basename $f .bam)
+  samtools sort $base.bam -o $base.sorted.bam
+  samtools index $base.sorted.bam
+done
+
+```
+
+### Extract mapped reads from sorted .bam files using FeatureCounts in R
+
+```{r, eval=FALSE}
+# Extract mapped reads from sorted .bam files using FeatureCounts in R
+# Language: R
+# Requirements: tidyverse, dplyr, Rsubread, stringr
+# Input: sorted and indexed bam file (.sorted.bam), .gff files for genomes
+# Output: coverage statistics, details and total coverage of mapping for each MAG (.csv)
+
+setwd('~/aoa_mags/mag_mt_mapping/bowtie2_output')
+
+sorted_files <- list.files(pattern = 'sorted.bam$')
+
+calculate_coverage <- function(file_key, annotation_path, ec_name){
+  
+  stats <- data.frame()
+  coverage <- data.frame()
+  
+  for(i in sorted_files){
+
+        fc <- featureCounts(files = i, 
+                          annot.ext = annotation_path,
+                          isGTFAnnotationFile = TRUE,
+                          GTF.featureType = 'CDS',
+                          GTF.attrType = 'locus_tag')
+ 
+  
+        if(nrow(stats) == 0){
+          stats <- fc$stat
+        } else { stats <- left_join(stats, fc$stat, by = 'Status')}
+  
+        if(nrow(coverage) == 0){
+          coverage <- fc$counts
+        } else {
+          coverage <- merge(coverage, fc$counts, by = 0)
+          coverage <- coverage %>% column_to_rownames(var = 'Row.names')
+        }
+    }
+  
+  
+  stats <- stats %>% column_to_rownames(var = 'Status')
+  stats <- stats %>% rbind(Total_Reads = colSums(stats))
+  stats <- as.data.frame(t(stats))
+  stats <- stats %>% mutate(Perc_Assigned = Assigned / Total_Reads)
+  
+  write.csv(stats, paste0("~/aoa_mags/featurecounts_mage/", ec_name, "_coverage_stats.csv"), row.names=TRUE)
+  write.csv(coverage, paste0("~/aoa_mags/featurecounts_mage/", ec_name, "_coverage_details.csv"), row.names=TRUE)
+  
+  coverage <- coverage[rowSums(coverage)>0,]
+
+  coverage <- coverage %>% mutate(Volume = rowSums(coverage)) %>% arrange(desc(Volume))
+
+  write.csv(coverage, paste0("~/aoa_mags/featurecounts_mage/", ec_name, "_coverage.csv"), row.names=TRUE)
+  
+}
+
+calculate_coverage(file_key="11_contig_2", 
+                   annotation_path='~/aoa_mags/mag_annotation_mage/Candidatus_Nitrosocosmicus_sp._EC11.gff',
+                   ec_name="ec11")
+
+calculate_coverage(file_key="13_21_contig_1",
+                   annotation_path="~/aoa_mags/mag_annotation_mage/Nitrosotalea_sp._EC131.gff",
+                   ec_name="ec131")
+```
+
+# Calculate TPM for expressed genes
+
+```{r, eval = FALSE}
+# Calculate TPM for expressed genes
+# Language: R
+# Requirements: tidyverse, dplyr
+# Input: mag_coverage files for each enrichment culture
+# Output: file with TPM of expressed genes (.csv)
+
+library(dplyr)
+library(tidyverse)
+
+setwd('~/aoa_mags/mag_coverage_analysis')
+
+ec131 <- read.csv('ec131_mage_coverage.csv')
+ec11 <- read.csv('ec11_mage_coverage.csv')
+
+coverage <- rbind(ec11, ec131)
+
+# tpm
+
+time_points <- c('Apr_PD1', 'Apr_PD2', 'Apr_PD3', 'Aug_PD1', 'Aug_PD2', 'Aug_PD3', 'Oct_PD1', 'Oct_PD2', 'Oct_PD3')
+cultures <- c('Ca. Nitrosocosmicus', 'Nitrosotalea 131')
+
+data.long <- pivot_longer(coverage, cols = -c('locus_tag', 'length', 'product', 'Total', 'Culture'), names_to = 'Sample', values_to = 'Reads')
+
+data.long <- data.long %>% mutate(length_kb = length/1000,
+                                  reads_per_kb_length = Reads/length_kb)
+
+data.long$per_million_factor <- NA
+
+for(i in cultures){
+  for(j in time_points){
+    subset <- data.long[data.long$Culture == i & data.long$Sample == j,]
+    total_reads_per_kb <- sum(subset$reads_per_kb_length)
+    reads_per_kb_million <- total_reads_per_kb / 1000000
+    data.long[data.long$Culture == i & data.long$Sample == j,]$per_million_factor <- reads_per_kb_million
+  }
+}
+
+data.long <- data.long %>% mutate(TPM = reads_per_kb_length/per_million_factor)
+
+write.csv(data.long, "transcript_hits_tpm.csv", row.names = TRUE)
+```
+
+# CAZYme analysis
+
+### Download and prepare dbcan3 for CAZyme mapping
+
+```{bash, eval = FALSE}
+# Download and prepare dbcan3 for CAZyme mapping
+# Language: BASH
+# Requirements: dbcan, diamond, blast, pybiolib (Python package)
+# Input: files from dbCAN3
+# Output: database folder (db) with necessary databases
+
+conda activate dbcan
+test -d db || mkdir db
+cd db \
+    && wget http://bcb.unl.edu/dbCAN2/download/Databases/fam-substrate-mapping-08012023.tsv && mv fam-substrate-mapping-08012023.tsv fam-substrate-mapping.tsv \
+    && wget http://bcb.unl.edu/dbCAN2/download/Databases/PUL.faa \
+    && wget http://bcb.unl.edu/dbCAN2/download/Databases/dbCAN-PUL_12-12-2023.xlsx && mv dbCAN-PUL_12-12-2023.xlsx dbCAN-PUL.xlsx \
+    && wget http://bcb.unl.edu/dbCAN2/download/Databases/dbCAN-PUL.tar.gz && tar xvf dbCAN-PUL.tar.gz && rm dbCAN-PUL.tar.gz \
+    && wget https://bcb.unl.edu/dbCAN2/download/Databases/dbCAN_sub.hmm \
+    && wget https://bcb.unl.edu/dbCAN2/download/Databases/V12/CAZyDB.07262023.fa && mv CAZyDB.07262023.fa CAZyDB.fa \
+    && wget https://bcb.unl.edu/dbCAN2/download/Databases/V12/dbCAN-HMMdb-V12.txt && mv dbCAN-HMMdb-V12.txt dbCAN.txt \
+    && wget https://bcb.unl.edu/dbCAN2/download/Databases/V12/tcdb.fa  \
+    && wget http://bcb.unl.edu/dbCAN2/download/Databases/V12/tf-1.hmm \
+    && wget http://bcb.unl.edu/dbCAN2/download/Databases/V12/tf-2.hmm \
+    && wget https://bcb.unl.edu/dbCAN2/download/Databases/V12/stp.hmm
+
+conda activate blast
+makeblastdb -in PUL.faa -dbtype prot
+
+conda activate diamond
+diamond makedb --in CAZyDB.fa -d CAZy
+diamond makedb --in tcdb.fa -d tcdb
+
+pip install pybiolib
+biolib run HMMER/hmmpress dbCAN_sub.hmm
+biolib run HMMER/hmmpress dbCAN.txt
+biolib run HMMER/hmmpress tf-1.hmm
+biolib run HMMER/hmmpress tf-2.hmm
+biolib run HMMER/hmmpress stp.hmm
+    
+```
+
+### Run dbcan3 to identify CAZymes in MAGs
+
+```{bash, eval = FALSE}
+# Run dbcan to identify CAZymes
+# Language: BASH
+# Requirements: dbcan with full suite of databases
+# Input: MAG fasta file (.fasta), MAG label file (.gff)
+# Output: dbcan output folder with HMM results
+
+conda activate run_dbcan_env
+run_dbcan database --db_dir db # create database - takes a long time, so if you've already done this skip this step!!!!
+run_dbcan CAZyme_annotation --input_raw_data NC11_contig_2.fasta --mode prok --output_dir NC11_cazyme --db_dir db
+run_dbcan CAZyme_annotation --input_raw_data 13_21_contig_1.fasta --mode prok --output_dir NT131_cazyme --db_dir db
+```
+
+### Extract CAZyme hits from dbcan output
+
+```{bash, eval = FALSE}
+pip install biopython
+```
+
+```{python, eval = FALSE}
+# Extract CAZyme hits from dbcan output
+# Language: Python
+# Requirements: Python packages (SeqIO, pandas)
+# Input: HMM output file (hmmer.out), dbcan formatted input file (uniInput)
+# Output: fasta file of CAZymes present in the MAGs (.fasta)
+from Bio import SeqIO
+import pandas as pd
+import os
+
+os.chdir('/home/rstudio/aoa_mags/mag_mt_mapping/CAZymes/NC11_cazyme') # run this for each CAZyme output (change path)
+
+hits_path = 'dbCAN_hmm_results.tsv'
+seqs_path = 'uniInput.faa'
+output_file = 'NC11_cazyme_positive_hits.fasta'
+
+hits = pd.read_csv(hits_path, sep='\t')
+true_hits = hits[(hits['i-Evalue'] < 1e-15) & (hits['Coverage'] > 0.8)]
+cazyme_ids = true_hits['Target Name'].tolist()
+
+for record in SeqIO.parse(seqs_path, 'fasta'):
+   if record.id in cazyme_ids:
+       with open(output_file, 'a') as f:
+           f.write(f'>{record.id}\n')
+           f.write(f'{record.seq}\n')
+```
+
+### Combine CAZyme hits with mapping results to analyze CAZyme expression
+
+```{r, eval = FALSE}
+# Combine CAZyme hits with mapping results to analyze CAZyme expression
+# Language: R
+# Requirements: dplyr, stringr, tidyverse, readxl
+# Input: TPM for mapping results, dbCAN hmm results for each culture
+# Output: cazyme tpm coverage file (.csv)
+
+library(dplyr)
+library(stringr)
+library(tidyverse)
+library(ggplot2)
+library(readxl)
+
+setwd('~/aoa_mags/mag_mt_mapping/CAZymes')
+
+tpm <- read_csv('~/aoa_mags/mag_coverage_analysis/transcript_hits_tpm.csv') %>% filter(Culture %in% c('Ca. Nitrosocosmicus', 'Nitrosotalea 131'))
+
+## Nitrosocosmicus (NC11)
+
+nc11_hmm <- read_delim("NC11_cazyme/dbCAN_hmm_results.tsv", 
+                       delim = "\t", escape_double = FALSE, 
+                       trim_ws = TRUE)
+
+nc11_hmm <- nc11_hmm %>% filter(`i-Evalue` < 1e-15,
+                          Coverage > 0.8)
+
+nc11_locus_tags <- read_xlsx('NC11_cazyme/NC11_Cazyme_IDs.xlsx')
+nc11_hmm_locus_tags <- left_join(nc11_hmm, nc11_locus_tags, by = 'Target Name')
+
+nc11_tpm <- left_join(nc11_hmm_locus_tags, tpm, by = 'locus_tag', relationship = 'many-to-many')
+
+
+## Nitrosotalea (NT131)
+
+nt131_hmm <- read_delim("NT131_cazyme/dbCAN_hmm_results.tsv", 
+                       delim = "\t", escape_double = FALSE, 
+                       trim_ws = TRUE)
+
+nt131_hmm <- nt131_hmm %>% filter(`i-Evalue` < 1e-15,
+                                Coverage > 0.8)
+
+nt131_locus_tags <- read_xlsx('NT131_cazyme/NT131_Cazyme_IDs.xlsx')
+nt131_hmm_locus_tags <- left_join(nt131_hmm, nt131_locus_tags, by = 'Target Name')
+
+nt131_tpm <- left_join(nt131_hmm_locus_tags, tpm, by = 'locus_tag', relationship = 'many-to-many')
+
+# Join data
+ 
+cazyme_tpm <- rbind(nc11_tpm, nt131_tpm)
+ 
+write.csv(cazyme_tpm, '~/aoa_mags/mag_coverage_analysis/cazyme_tpm_coverage.csv', row.names = FALSE)
+
+```
+
+# Use Barrnap to confirm conserved rRNA regions
+
+```{bash, eval = FALSE}
+# Use Barrnap to confirm conserved rRNA regions
+# Language: bash
+# Requirements: mag_mapper conda environment with barrnap installed
+# Input: genome for each culture (.fasta)
+# Output: identified rRNA regions (.txt)
+
+conda activate mag_mapper
+
+barrnap 11_contig_2.fasta --kingdom arc > nc_mag_barrnap_out.txt
+barrnap 13_contig_1.fasta --kingdom arc > nt_131_mag_barrnap_out.txt
+```
+
+# Average nucleotide identity (ANI) to other genomes available in MAGE/Microscope
+
+```{bash, eval = FALSE}
+# Use Barrnap to confirm conserved rRNA regions
+# Language: bash
+# Requirements: mag_mapper conda environment with pyani-plus, seaborn and mummer
+# Input: downloaded sequences from MAGE for each genome that are extracted into folders, "cosmicus_ani/" and "talea_ani/", respectively
+# Output: many files comparing all the sequences included in the folders
+
+# Nitrosocosmicus
+
+pyani-plus anim cosmicus_ani/ --database cosmicus.db --create-db --name cosmicus 
+
+pyani-plus export-run --database cosmicus.db --outdir cosmicus_ani/
+
+pyani-plus plot-run --database cosmicus.db --outdir cosmicus_ani/
+
+# Nitrosotalea
+
+pyani-plus anim talea_ani/ --database talea.db --create-db --name talea 
+
+pyani-plus export-run --database talea.db --outdir cosmicus_ani/
+
+pyani-plus plot-run --database cosmicus.db --outdir cosmicus_ani/
+```
+
+# Identify copper centers with PFAM HMM in Hmmer
+
+### Run PFAM HMM for both genomes
+
+```{bash, eval = FALSE}
+# Identify copper centers with PFAM HMM in Hmmer
+# Language: bash
+# Requirements: mag_mapper conda environment with hmmer installed
+# Input: Pfam databases (installed in script), protein files downloaded from MAGE (.1-Proteins.fasta)
+# Output: HMM output per domain (.domtblout)
+
+## adapted from https://github.com/aziele/pfam_scan
+
+wget http://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.hmm.dat.gz
+wget http://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.hmm.gz
+
+mkdir pfamdb
+gunzip -c Pfam-A.hmm.dat.gz > pfamdb/Pfam-A.hmm.dat
+gunzip -c Pfam-A.hmm.gz > pfamdb/Pfam-A.hmm
+rm Pfam-A.hmm.gz Pfam-A.hmm.dat.gz
+
+hmmpress pfamdb/Pfam-A.hmm
+
+hmmscan --domtblout nt131.domtblout -E 1e-5 pfamdb/Pfam-A.hmm EC131NT.1-Proteins.fasta 
+hmmscan --domtblout nc11.domtblout -E 1e-5 pfamdb/Pfam-A.hmm EC11NC.1-Proteins.fasta 
+```
+
+### Reformat HMM results
+
+```{r, eval = FALSE}
+# Reformat HMM results
+# Language: R
+# Requirements: dplyr, stringr
+# Input: .domtblout files for both genomes
+# Output: cleaned files with PFAM HMM results (.csv)
+
+## Nitrosocosmicus genome
+
+nc11 <- read_table("~/aoa_mags/hmmer_pfam/nc11.domtblout", 
+                   col_names = FALSE, comment = "#")
+nc11 <- as.data.frame(nc11)
+colnames(nc11) <- c('target_name', 'target_accession', 'target_length', 'query_name', 'query_accession', 'query_length',
+                    'E-value', 'score', 'bias', 'num_domain', 'total_domains', 'conditional-Evalue',
+                    'independent-Evalue', 'domain_score', 'domain_bias', 'hmm_from', 'hmm_to',
+                    'alignment_from', 'alignment_to', 'seq_from', 'seq_too', 'accuracy', 'description1', 'description2', 'description3')
+nc11$description <- str_c(nc11$description1, nc11$description2, nc11$description3, sep = ' ')
+nc11 <- nc11 %>% select(-description1, -description2, -description3)
+
+write.csv(nc11, 'hmmer_pfam/nc11_pfam_results.csv', row.names = FALSE)
+
+## Nitrosotalea genome
+
+nt131 <- read_table("~/aoa_mags/hmmer_pfam/nt131.domtblout", 
+                   col_names = FALSE, comment = "#")
+nt131 <- as.data.frame(nt131)
+colnames(nt131) <- c('target_name', 'target_accession', 'target_length', 'query_name', 'query_accession', 'query_length',
+                    'E-value', 'score', 'bias', 'num_domain', 'total_domains', 'conditional-Evalue',
+                    'independent-Evalue', 'domain_score', 'domain_bias', 'hmm_from', 'hmm_to',
+                    'alignment_from', 'alignment_to', 'seq_from', 'seq_too', 'accuracy', 'description1', 'description2')
+nt131$description <- str_c(nt131$description1, nt131$description2, sep = ' ')
+nt131 <- nt131 %>% select(-description1, -description2)
+
+write.csv(nt131, 'hmmer_pfam/nt131_pfam_results.csv', row.names = FALSE)
+
+```
+
+### Extract protein hits with copper center
+
+```{r, eval = FALSE}
+# Extract protein hits with copper center
+# Language: R
+# Requirements: dplyr
+# Input: cleaned PFAM output files for each genome (.csv)
+# Output: cleaned files with copper center proteins out of PFAM HMM results (.csv)
+
+## Nitrosotalea
+
+nt_131 <- read.csv("hmmer_pfam/nt131_pfam_results.csv")
+
+query_names <- c("Cupredoxin_1", "COX1", "COX2", "Copper-bind", "Cu-oxidase", "Cu-oxidase_2", "Cu-oxidase_3")
+
+product_names_nt131 <- nt131$query_name %>% unique() 
+
+nt.copper <- data.frame()
+
+for(i in product_names_nt131){
+  temp <- nt131 %>% filter(query_name == i)
+  for(j in 1:nrow(temp)){
+    if(temp[j,]$target_name %in% query_names){
+      nt.copper <- rbind(nt.copper, temp)
+      break 
+    }
+    break
+  }
+}
+
+write.csv(nt.copper, 'hmmer_pfam/nt131_copper_pfam.csv', row.names=FALSE)
+
+## Nitrosocosmicus
+
+nc_11 <- read.csv("hmmer_pfam/nc11_pfam_results.csv")
+
+product_names_nc11 <- nc11$query_name %>% unique() 
+
+nc.copper <- data.frame()
+
+for(i in product_names_nc11){
+  temp <- nc11 %>% filter(query_name == i)
+  for(j in 1:nrow(temp)){
+    if(temp[j,]$target_name %in% query_names){
+      nc.copper <- rbind(nc.copper, temp)
+      break 
+    }
+    break
+  }
+}
+
+write.csv(nc.copper, 'hmmer_pfam/nc11_copper_pfam.csv', row.names=FALSE)
+
+```

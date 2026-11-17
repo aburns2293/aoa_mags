@@ -1,0 +1,22 @@
+{
+  "version": "1.2",
+  "dbname": "phasin_AOA_db",
+  "dbtype": "Protein",
+  "db-version": 5,
+  "description": "confirmed_phasins.fasta",
+  "number-of-letters": 2169,
+  "number-of-sequences": 12,
+  "last-updated": "2026-10-27T13:34:00",
+  "number-of-volumes": 1,
+  "bytes-total": 41241,
+  "bytes-to-cache": 2390,
+  "files": [
+    "phasin_AOA_db.pdb",
+    "phasin_AOA_db.phr",
+    "phasin_AOA_db.pin",
+    "phasin_AOA_db.pot",
+    "phasin_AOA_db.psq",
+    "phasin_AOA_db.ptf",
+    "phasin_AOA_db.pto"
+  ]
+}

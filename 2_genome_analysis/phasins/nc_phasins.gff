@@ -1,0 +1,22 @@
+##gff-version 3
+##sequence-region contig_2 1 3081859
+contig_2	feature	gene	4557	5630	.	-	.	gene=phaC;locus_tag=EC11NC_v1_0009
+contig_2	feature	gene	5623	6204	.	-	.	locus_tag=EC11NC_v1_0010
+contig_2	feature	gene	351457	351837	.	-	.	locus_tag=EC11NC_v1_0445
+contig_2	feature	gene	370784	371380	.	-	.	locus_tag=EC11NC_v1_0469
+contig_2	feature	gene	376625	377008	.	-	.	locus_tag=EC11NC_v1_0480
+contig_2	feature	gene	437532	437981	.	-	.	locus_tag=EC11NC_v1_0549
+contig_2	feature	gene	693234	694766	.	-	.	locus_tag=EC11NC_v1_0847
+contig_2	feature	gene	1172484	1173113	.	-	.	locus_tag=EC11NC_v1_1440
+contig_2	feature	gene	1215980	1216324	.	-	.	locus_tag=EC11NC_v1_1498
+contig_2	feature	gene	2263737	2264339	.	+	.	locus_tag=EC11NC_v1_2801
+contig_2	feature	gene	2290283	2290792	.	+	.	locus_tag=EC11NC_v1_2843
+contig_2	feature	gene	2449236	2449829	.	-	.	locus_tag=EC11NC_v1_3027
+contig_2	feature	gene	2564182	2564769	.	+	.	locus_tag=EC11NC_v1_3181
+contig_2	feature	gene	2610354	2610980	.	-	.	locus_tag=EC11NC_v1_3248
+contig_2	feature	gene	2621766	2622377	.	-	.	locus_tag=EC11NC_v1_3259
+contig_2	feature	gene	2669913	2671430	.	+	.	locus_tag=EC11NC_v1_3324
+contig_2	feature	gene	2674686	2674988	.	+	.	locus_tag=EC11NC_v1_3330
+contig_2	feature	gene	2697101	2697667	.	-	.	locus_tag=EC11NC_v1_3363
+
+

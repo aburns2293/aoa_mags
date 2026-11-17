@@ -1,0 +1,9 @@
+	Candidatus_Nitrosocaldus_islandicus_strain_3F	Candidatus_Nitrosocosmicus_epidermidis_T1S	Candidatus_Nitrosocosmicus_hydrocola_G61	Candidatus_Nitrosocosmicus_percolatus_Mir11	Candidatus_Nitrosocosmicus_unguis_R2S	Nitrosocosmicus_arcticus_Kfb	Nitrosocosmicus_franklandus_C13	Nitrosocosmicus_oleophilus
+Candidatus_Nitrosocaldus_islandicus_strain_3F	0	495	587	361	545	495	500	496
+Candidatus_Nitrosocosmicus_epidermidis_T1S	495	0	32766	166664	189412	181977	25488	179148
+Candidatus_Nitrosocosmicus_hydrocola_G61	587	32852	0	29736	29515	26203	80145	30584
+Candidatus_Nitrosocosmicus_percolatus_Mir11	361	166784	29718	0	92657	156309	17490	195119
+Candidatus_Nitrosocosmicus_unguis_R2S	545	189414	29497	92701	0	180108	19174	212707
+Nitrosocosmicus_arcticus_Kfb	495	181974	26200	156244	180180	0	18074	174942
+Nitrosocosmicus_franklandus_C13	500	25386	80643	17368	19049	18074	0	20981
+Nitrosocosmicus_oleophilus	496	180257	30583	195031	212627	175134	21107	0
